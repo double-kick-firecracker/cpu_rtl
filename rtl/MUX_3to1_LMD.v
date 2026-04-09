@@ -1,37 +1,19 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company:
-// Engineer:
-//
-// Create Date: 2024/11/25 09:52:17
-// Design Name:
-// Module Name: MUX_3to1_LMD
-// Project Name:
-// Target Devices:
-// Tool Versions:
-// Description:
-//
-// Dependencies:
-//
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-//
-//////////////////////////////////////////////////////////////////////////////////
 
 `include "ctrl_signal_def.v"
-module MUX_3to1_LMD(X, Y, Z, control, out);
-    input  [31:0] X;        //临时寄存器ALUOut中的内容
-    input  [31:0] Y;        //临时寄存器LMD中的内容
+module MUX_3to1_LMD(X, Y, Z,Z_, control, out);
+    input  [31:0] X;        //涓存椂瀵勫瓨鍣ˋLUOut涓殑鍐呭
+    input  [31:0] Y;        //涓存椂瀵勫瓨鍣↙MD涓殑鍐呭
     input  [31:2] Z;        //PC+4
-    input  [1:0]  control;  //选择控制信号
-    output reg [31:0] out;   //输出选择结果
+    input  [1:0]  Z_;
+    input  [1:0]  control;  //閫夋嫨鎺у埗淇″彿
+    output reg [31:0] out;   //杈撳嚭閫夋嫨缁撴灉
 
     always @ (X or Y or Z or control) begin
         case(control)
-            `WDSel_FromALU  : out = X;  //选择X
-            `WDSel_FromMEM  : out = Y;  //选择Y
-            `WDSel_FromPC   : out = Z;  //选择Z
+            `WDSel_FromALU  : out = X;  //閫夋嫨X
+            `WDSel_FromMEM  : out = Y;  //閫夋嫨Y
+            `WDSel_FromPC   : out = {Z,Z_};  //閫夋嫨Z
             `WDSel_Else     : out = 0;
         endcase
     end
