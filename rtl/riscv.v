@@ -169,7 +169,7 @@ module riscv(clk, rst);
     
     // 实例化 MUX_3to1_LMD--决定写回什么数据
     MUX_3to1_LMD U_MUX_3to1_LMD (
-        .X(WB_ALU_result), .Y(RD), .Z(WB_PCA4),
+        .X(WB_ALU_result), .Y(RD), .Z(WB_PCA4), .Z_(WB_PCA4[1:0]),
         .control(WB_WDSel), .out(WB_WD)
     );
     
