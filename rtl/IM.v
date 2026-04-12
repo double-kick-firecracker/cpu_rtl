@@ -1,34 +1,18 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company:
-// Engineer:
-//
-// Create Date: 2024/10/26 09:28:20
-// Design Name:
-// Module Name: IM
-// Project Name:
-// Target Devices:
-// Tool Versions:
-// Description:
-//
-// Dependencies:
-//
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-//
-//////////////////////////////////////////////////////////////////////////////////
-
 `include "ctrl_signal_def.v"
-module IM(InsMemRW, addr, Ins);
-    input         InsMemRW;    //Ö¸Áî´æ´¢µ¥ÔªĞÅºÅ
-    input  [11:2] addr;        //Ö¸Áî´æ´¢Æ÷µØÖ·
-    output reg [31:0] Ins;     //È¡µÃµÄÖ¸Áî
+module IM(InsMemRW, addr, Ins,clk,stall);
+    input         InsMemRW;    //æŒ‡ä»¤å­˜å‚¨å•å…ƒä¿¡å·
+    input  [11:2] addr;        //æŒ‡ä»¤å­˜å‚¨å™¨åœ°å€
+    input         clk;
+    output reg [31:0] Ins;     //å–å¾—çš„æŒ‡ä»¤
+    input         stall;
     reg [31:0] memory[0:1023];
 
-    always @(addr or InsMemRW) begin
-        if (InsMemRW) begin
-            Ins <= memory[addr];  //¸ù¾İµØÖ·È¡Ö¸Áî
+    always @(posedge clk) begin
+        if (stall)
+            Ins <= Ins;
+        else begin
+            Ins <= memory[addr];  //æ ¹æ®åœ°å€å–æŒ‡ä»¤
         end
     end
 endmodule
