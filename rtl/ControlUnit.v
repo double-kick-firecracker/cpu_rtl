@@ -21,7 +21,9 @@ module ControlUnit(
     output reg [1:0] RegSel, //写回RF的地址选择
     output reg [1:0] NPCOp,  //NPC的数值来源
     output reg [1:0] WDSel,  //写回data的来源
-    output reg [3:0] ALUOp   //ALU计算模式   
+    output reg [3:0] ALUOp,   //ALU计算模式   
+    output reg Jump,
+    output reg Branch
 );
 
  reg [1:0] ALU_category ; //对ALU计算模式的细分
@@ -39,6 +41,8 @@ module ControlUnit(
         NPCOp    = `NPC_PC;        // 默认+4
         ExtSel   = `ExtSel_SIGNED;   // 默认有符号拓展
         ALU_category = 2'b00;      // 默认用加法
+        Jump     = 1'b0;
+        Branch   = 1'b0;
         case (opcode)
             `INSTR_RTYPE_OP: begin
                 RFWrite      = 1'b1;
@@ -63,17 +67,20 @@ module ControlUnit(
             `INSTR_BTYPE_OP: begin
                 ALU_category = 2'b01;
                 NPCOp    = `NPC_Offset12;
+                Branch   = 1'b1;
             end
             `INSTR_JAL_OP: begin
                 RFWrite      = 1'b1;
                 WDSel        = `WDSel_FromPC;  // 将 PC+4 写入 rd
                 NPCOp        = `NPC_Offset20;  // 触发 JAL 跳转
+                Jump         = 1'b1;
             end
             `INSTR_JALR_OP: begin
                 RFWrite      = 1'b1;
                 WDSel        = `WDSel_FromPC;  // 将 PC+4 写入 rd
                 NPCOp        = `NPC_rs;        // 触发 JALR 跳转，且imm有符号
                 ALUSrcB      = `ALUSrcB_Imm;
+                Jump         = 1'b1;
             end
             default: ;
         endcase
