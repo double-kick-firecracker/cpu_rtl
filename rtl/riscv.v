@@ -106,6 +106,8 @@ module riscv(clk, rst);
     always @(posedge clk or posedge rst) begin
         if (rst) 
             id_ex_ctrl_reg <= 33'b0;
+        else if(FlushE)
+            id_ex_ctrl_reg <= 33'b0;
         else 
             id_ex_ctrl_reg <= {
                 ID_rs1,ID_rs2,
@@ -124,7 +126,7 @@ module riscv(clk, rst);
     wire [4:0] EX_rd    = id_ex_ctrl_reg[19:15];
     wire [3:0] EX_ALUOp = id_ex_ctrl_reg[14:11];
     wire [1:0] EX_NPCOp = id_ex_ctrl_reg[10:9];
-    wire EX_ALUSrcB     = id_ex_ctrl_reg[8:7];
+    wire [1:0] EX_ALUSrcB     = id_ex_ctrl_reg[8:7];
     wire EX_ALUSrcA     = id_ex_ctrl_reg[6];
     wire EX_DMCtrl      = id_ex_ctrl_reg[5];
     wire EX_RFWrite     = id_ex_ctrl_reg[4];
@@ -137,7 +139,7 @@ module riscv(clk, rst);
     wire zero;
     wire [31:0] PCA4;                  
     NPC U_NPC (
-        .PC(EX_PC), .NPCOp(EX_NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs({Forwarded_A[31:2],2'b00}),
+        .PC(EX_PC), .NPCOp(EX_NPCOp), .Offset12(EX_Offset12), .Offset20(EX_Offset20), .rs({Forwarded_A[31:2],2'b00}),
         .imm(EX_Imm32), .PCA4(PCA4),.NPC(EX_NPC_Target)//修改了rs接入的数
     );
     
@@ -170,15 +172,15 @@ module riscv(clk, rst);
     always @(posedge clk or posedge rst) begin
         if (rst) ex_mem_ctrl_reg <= 11'b0;
         else ex_mem_ctrl_reg <= {
-            EX_rd,                              // [10:6] 5位
-            EX_DMCtrl, EX_RFWrite,              // [5:4]  2位
-            EX_WDSel, EX_RegSel                 // [3:0]  4位
+            EX_rd,                              
+            EX_DMCtrl, EX_RFWrite,              
+            EX_WDSel, EX_RegSel                 
         };
     end
     
     Flopr U_ALUOut (.clk(clk), .rst(rst), .in_data(ALU_result), .out_data(MEM_ALU_result),.CLR(1'b0), .Stall(1'b0));
-    Flopr U_EXMEM_RD2  ( .clk(clk), .rst(rst), .in_data(Forwarded_B),     .out_data(MEM_RD2),.CLR(1'b0), .Stall(1'b0) );
-    Flopr U_EXMEM_PCA4 ( .clk(clk), .rst(rst), .in_data(PCA4),    .out_data(MEM_PCA4),.CLR(1'b0), .Stall(1'b0) );
+    Flopr U_EXMEM_RD2  ( .clk(clk), .rst(rst), .in_data(Forwarded_B), .out_data(MEM_RD2),.CLR(1'b0), .Stall(1'b0) );
+    Flopr U_EXMEM_PCA4 ( .clk(clk), .rst(rst), .in_data(PCA4), .out_data(MEM_PCA4),.CLR(1'b0), .Stall(1'b0) );
     
 //————————MEM————————//
     wire [4:0] MEM_rd      = ex_mem_ctrl_reg[10:6];
@@ -229,21 +231,19 @@ module riscv(clk, rst);
     wire EX_is_Load = (id_ex_ctrl_reg[3:2] == 2'b01); //看看WDSel最终写回的是哪里的数据
     wire Load_Use_Stall = EX_is_Load && (EX_rd != 5'd0) && ((EX_rd == ID_rs1) || (EX_rd == ID_rs2));
     
-    assign StallF = EX_is_Load;                       // 暂停 PC
-    assign StallD = EX_is_Load;                       // 暂停 IF/ID
-    assign FlushE = EX_is_Load || EX_Control_Taken;   // 清空 ID/EX (LoadUse时变气泡，跳错时也变气泡)
+    assign StallF = Load_Use_Stall;                       // 暂停 PC
+    assign StallD = Load_Use_Stall;                       // 暂停 IF/ID
+    assign FlushE = Load_Use_Stall || EX_Control_Taken;   // 清空 ID/EX (LoadUse时变气泡，跳错时也变气泡)
     assign FlushD = EX_Control_Taken;              // 清空 IF/ID (只有跳错时需要清空)
 
 //——————forward——————//
     wire [1:0] ForwardA;
     wire [1:0] ForwardB;
         
-    assign ForwardA = (rst == 1'b0) ? 2'b00 : 
-                       ((MEM_RFWrite == 1'b1) & (MEM_rd != 5'h00) & (MEM_rd == EX_rs1)) ? 2'b10 :
+    assign ForwardA = ((MEM_RFWrite == 1'b1) & (MEM_rd != 5'h00) & (MEM_rd == EX_rs1)) ? 2'b10 :
                        ((WB_RFWrite == 1'b1) & (WB_rd != 5'h00) & (WB_rd == EX_rs1)) ? 2'b01 : 2'b00;
                        
-    assign ForwardB = (rst == 1'b0) ? 2'b00 : 
-                       ((MEM_RFWrite == 1'b1) & (MEM_rd != 5'h00) & (MEM_rd == EX_rs2)) ? 2'b10 :
+    assign ForwardB = ((MEM_RFWrite == 1'b1) & (MEM_rd != 5'h00) & (MEM_rd == EX_rs2)) ? 2'b10 :
                        ((WB_RFWrite == 1'b1) & (WB_rd != 5'h00) & (WB_rd == EX_rs2)) ? 2'b01 : 2'b00;
     
     assign Forwarded_A = (ForwardA == 2'b10) ? MEM_ALU_result :
