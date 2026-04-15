@@ -233,8 +233,8 @@ module riscv(clk, rst);
     
     assign StallF = Load_Use_Stall;                       // 暂停 PC
     assign StallD = Load_Use_Stall;                       // 暂停 IF/ID
-    assign FlushE = Load_Use_Stall || EX_Control_Taken;   // 清空 ID/EX (LoadUse时变气泡，跳错时也变气泡)
-    assign FlushD = EX_Control_Taken;              // 清空 IF/ID (只有跳错时需要清空)
+    assign FlushE = Load_Use_Stall || EX_Control_Taken || rst;   // 清空 ID/EX (LoadUse时变气泡，跳错时也变气泡)
+    assign FlushD = EX_Control_Taken || rst;              // 清空 IF/ID (只有跳错时需要清空)
 
 //——————forward——————//
     wire [1:0] ForwardA;
