@@ -153,7 +153,7 @@ module riscv(clk, rst);
 
     // 实例化 MUX_3to1_B——ALUB的操作数来源
     MUX_3to1_B U_MUX_3to1_B (
-        .X(Forwarded_B), .Y(EX_Imm32), .Z(Offset), .control(EX_ALUSrcB), .out(B)
+        .X(Forwarded_B), .Y(EX_Imm32), .Z(EX_Offset12), .control(EX_ALUSrcB), .out(B)
     );
 
     // 实例化 ALU
@@ -229,12 +229,24 @@ module riscv(clk, rst);
     
 //————————harzard unit————————//
     wire EX_is_Load = (id_ex_ctrl_reg[3:2] == 2'b01); //看看WDSel最终写回的是哪里的数据
-    wire Load_Use_Stall = EX_is_Load && (EX_rd != 5'd0) && ((EX_rd == ID_rs1) || (EX_rd == ID_rs2));
+    wire [6:0] ID_opcode = out_ins[6:0];
+    wire ID_reads_rs2 = (ID_opcode == 7'b0110011) || (ID_opcode == 7'b0100011) || (ID_opcode == 7'b1100011);
+    wire ID_reads_rs1 = (ID_opcode != 7'b1101111) &&  (ID_opcode != 7'b1100111);
+    wire Load_Use_Stall = EX_is_Load && (EX_rd != 5'd0) && 
+                          ((ID_reads_rs1 && (EX_rd == ID_rs1)) || 
+                           (ID_reads_rs2 && (EX_rd == ID_rs2)));
+    reg Flush_Delay;
+    always @(posedge clk or posedge rst) begin
+        if (rst) 
+            Flush_Delay <= 1'b0;
+        else 
+            Flush_Delay <= EX_Control_Taken; // 记住上一拍的跳转状态
+    end
     
     assign StallF = Load_Use_Stall;                       // 暂停 PC
     assign StallD = Load_Use_Stall;                       // 暂停 IF/ID
-    assign FlushE = Load_Use_Stall || EX_Control_Taken || rst;   // 清空 ID/EX (LoadUse时变气泡，跳错时也变气泡)
-    assign FlushD = EX_Control_Taken || rst;              // 清空 IF/ID (只有跳错时需要清空)
+    assign FlushE = Load_Use_Stall || rst;   // 其实FlushD已经可以做到jmp的flush了，FlushE已经只用管load了
+    assign FlushD = EX_Control_Taken || Flush_Delay || rst;              // 清空 IF/ID (只有跳错时需要清空)
 
 //——————forward——————//
     wire [1:0] ForwardA;
