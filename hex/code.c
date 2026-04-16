@@ -14,7 +14,7 @@ int main()
     asm volatile ("and   x15,x1 ,x2     ");
     asm volatile ("xor   x19,x2 ,x1     ");
     asm volatile ("ori   x4 ,x0 ,4      ");
-    asm volatile ("sll   x7 ,x2 ,x4     ");
+    asm volatile ("sll   x7 ,x2 ,x4     "); 
     asm volatile ("ori   x15,x0 ,128    ");
     asm volatile ("srl   x6 ,x15,x4     ");
     asm volatile ("sra   x5 ,x15,x4     ");
@@ -37,4 +37,9 @@ int main()
     asm volatile ("ori   x0 ,x1 ,0      ");
     asm volatile ("_jtest:              ");
     asm volatile ("lw    x28,4(x29)     ");
+    asm volatile ("beq x27, x28, 16     ");
+    asm volatile ("ori   x0 ,x1 ,0      ");
+    asm volatile ("ori   x0 ,x1 ,0      ");
+    asm volatile ("ori   x0 ,x1 ,0      ");
+    asm volatile ("lw x30, 4(x29)      ");
 }
