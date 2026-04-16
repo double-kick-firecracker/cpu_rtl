@@ -137,18 +137,17 @@ module riscv(clk, rst);
 
     wire [31:0] A, B, ALU_result;
     wire zero;
-    wire [31:0] PCA4;                  
+    wire [31:0] PCA4;  
+    wire [31:0] Forwarded_A;
+    wire [31:0] Forwarded_B;//包含了前递情况的预先声明                
     NPC U_NPC (
         .PC(EX_PC), .NPCOp(EX_NPCOp), .Offset12(EX_Offset12), .Offset20(EX_Offset20), .rs({Forwarded_A[31:2],2'b00}),
         .imm(EX_Imm32), .PCA4(PCA4),.NPC(EX_NPC_Target)//修改了rs接入的数
     );
     
-    wire [31:0] Forwarded_A;
-    wire [31:0] Forwarded_B;//包含了前递情况的预先声明
-    
     // 实例化 MUX_2to1_A——决定ALUA的操作数来源
     MUX_2to1_A U_MUX_2to1_A (
-        .X(Forwarded_A), .Y(32'h0), .control(EX_ALUSrcA), .out(A)
+        .X(Forwarded_A), .Y(5'h0), .control(EX_ALUSrcA), .out(A)
     );
 
     // 实例化 MUX_3to1_B——ALUB的操作数来源
@@ -217,7 +216,7 @@ module riscv(clk, rst);
     
     // 实例化 MUX_3to1_LMD--决定写回什么数据
     MUX_3to1_LMD U_MUX_3to1_LMD (
-        .X(WB_ALU_result), .Y(RD), .Z(WB_PCA4[31:2]), .Z_(WB_PCA4[1:0]),
+        .X(WB_ALU_result), .Y(RD), .Z(WB_PCA4[31:2]),.Z_(WB_PCA4[1:0]),
         .control(WB_WDSel), .out(WB_WD)
     );
     
