@@ -4,7 +4,7 @@ module riscv(clk, rst);
     input clk, rst;
         
 //----------IF--------// 
-    wire        ID_Control_Taken_Real; // EX 阶段判断的结果：是否真要跳转 (Branch Taken 或 JAL/JALR)
+//    wire        ID_Control_Taken_Real; // EX 阶段判断的结果：是否真要跳转 (Branch Taken 或 JAL/JALR)
     wire [31:0] ID_NPC_Target;    // EX 阶段 (NPC模块) 计算出的跳转目标地址
     wire [31:0] IF_PC;
     wire [31:0] IF_PC_plus_4;
@@ -15,13 +15,16 @@ module riscv(clk, rst);
     wire ID_Jump, ID_Branch;
     wire ID_Branch_Cond_Met;
     wire [31:0] ID_PC;
+    wire Branch_Stall;
+    wire Load_Use_Stall;
+    wire ID_Actual_Taken;
     assign IF_PC_plus_4 = IF_PC + 32'd4; 
-    assign NPC = ID_Control_Taken_Real ? ID_NPC_Target : IF_PC_plus_4;
+    assign NPC = ID_Actual_Taken ? ID_NPC_Target : (ID_PC + 32'd4);
     // ================= ID 阶段：BTB 预测校验与反馈网络 =================
     // 1. 判断当前 ID 阶段是否为控制类指令
     wire ID_is_Control = ID_Jump || ID_Branch;
     // 2. 算出无视任何预测的客观真实意图
-    wire ID_Actual_Taken = ID_Jump || (ID_Branch && ID_Branch_Cond_Met);//ID_Actual_Taken和ID_Control_Taken是一回事，所以把后者删掉了，替换了
+    assign ID_Actual_Taken = ID_Jump || (ID_Branch && ID_Branch_Cond_Met);//ID_Actual_Taken和ID_Control_Taken是一回事，所以把后者删掉了，替换了
     // 4. 核心校验：当前正在取指的 PC (IF_PC) 如果偏离了正确地址，则判定为误预测
     // 必须在无气泡阻塞 (Stall == 0) 的当拍，才确认为有效误预测
     wire Mispredict_Real = ID_is_Control && (IF_PC != NPC) && !Branch_Stall && !Load_Use_Stall;
@@ -106,7 +109,6 @@ module riscv(clk, rst);
     wire ID_Zero;
     wire [31:0] ID_PCA4;
     wire MEM_is_Load;
-    wire Branch_Stall;
     wire ID_is_Jalr;
                     
     NPC U_NPC (
@@ -248,7 +250,7 @@ module riscv(clk, rst);
     wire [6:0] ID_opcode = out_ins[6:0];
     wire ID_reads_rs2 = (ID_opcode == 7'b0110011) || (ID_opcode == 7'b0100011) || (ID_opcode == 7'b1100011);
     wire ID_reads_rs1 = (ID_opcode != 7'b1101111) &&  (ID_opcode != 7'b1100111);
-    wire Load_Use_Stall = EX_is_Load && (EX_rd != 5'd0) && 
+    assign Load_Use_Stall = EX_is_Load && (EX_rd != 5'd0) && 
                           ((ID_reads_rs1 && (EX_rd == ID_rs1)) || 
                            (ID_reads_rs2 && (EX_rd == ID_rs2)));
                            
@@ -257,13 +259,15 @@ module riscv(clk, rst);
         if (rst) 
             Flush_Delay <= 1'b0;
         else 
-            // 记住当前拍成功发生了跳转，延迟一拍去冲刷即将进入 ID 阶段的错误指令
-            Flush_Delay <= Mispredict_Real;
+            // 只要 Mispredict_Real 有效，下一拍严格且只冲刷 1 次
+            Flush_Delay <= Mispredict_Real; 
     end
-                           
+    
     assign StallF = Load_Use_Stall || Branch_Stall;
     assign StallD = Load_Use_Stall || Branch_Stall;
     assign FlushE = Load_Use_Stall || Branch_Stall || rst;
+    
+    // 恢复 1 拍冲刷，绝不多杀
     assign FlushD = Flush_Delay || rst;
 
 //------forward------//
@@ -304,7 +308,7 @@ module riscv(clk, rst);
                           );
     
     // 如果发生了任何Stall，决断不能生效，防止错误跳跃
-    assign ID_Control_Taken_Real = ID_Actual_Taken && !Branch_Stall && !Load_Use_Stall;
+ //   assign ID_Control_Taken_Real = ID_Actual_Taken && !Branch_Stall && !Load_Use_Stall;
     
     
 endmodule
