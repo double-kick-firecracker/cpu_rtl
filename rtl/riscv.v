@@ -3,29 +3,41 @@
 module riscv(clk, rst);
     input clk, rst;
         
-//——————————IF————————// 
-    wire        EX_Control_Taken; // EX 阶段判断的结果：是否真要跳转 (Branch Taken 或 JAL/JALR)
-    wire [31:0] EX_NPC_Target;    // EX 阶段 (NPC模块) 计算出的跳转目标地址
+//----------IF--------// 
+    wire        ID_Control_Taken_Real; // EX 阶段判断的结果：是否真要跳转 (Branch Taken 或 JAL/JALR)
+    wire [31:0] ID_NPC_Target;    // EX 阶段 (NPC模块) 计算出的跳转目标地址
     wire [31:0] IF_PC;
     wire [31:0] IF_PC_plus_4;
     wire [31:0] in_ins;
     wire [31:0] NPC;
     wire IRWrite, PCWrite, InsMemRW;
     wire StallF,StallD;
-    
+    wire ID_Jump, ID_Branch;
+    wire ID_Branch_Cond_Met;
+    wire [31:0] ID_PC;
     assign IF_PC_plus_4 = IF_PC + 32'd4; 
-    assign NPC = EX_Control_Taken ? EX_NPC_Target : IF_PC_plus_4;
+    assign NPC = ID_Control_Taken_Real ? ID_NPC_Target : IF_PC_plus_4;
+    // ================= ID 阶段：BTB 预测校验与反馈网络 =================
+    // 1. 判断当前 ID 阶段是否为控制类指令
+    wire ID_is_Control = ID_Jump || ID_Branch;
+    // 2. 算出无视任何预测的客观真实意图
+    wire ID_Actual_Taken = ID_Jump || (ID_Branch && ID_Branch_Cond_Met);//ID_Actual_Taken和ID_Control_Taken是一回事，所以把后者删掉了，替换了
+    // 4. 核心校验：当前正在取指的 PC (IF_PC) 如果偏离了正确地址，则判定为误预测
+    // 必须在无气泡阻塞 (Stall == 0) 的当拍，才确认为有效误预测
+    wire Mispredict_Real = ID_is_Control && (IF_PC != NPC) && !Branch_Stall && !Load_Use_Stall;
+    // 5. BTB 更新使能：只有控制指令且无阻塞时，才允许将结果写入 BTB 历史表
+    wire BTB_Update_En = ID_is_Control && !Branch_Stall && !Load_Use_Stall;
     PC U_PC (
-        .clk(clk), .rst(rst), .PCWrite(PCWrite), .NPC(NPC), .PC(IF_PC), .stall(StallF)
+        .clk(clk), .rst(rst), .PCWrite(PCWrite), .NPC(NPC), .PC(IF_PC), .stall(StallF),.Update_En(BTB_Update_En),       // 决断有效，允许更新 BTB
+        .Update_PC(ID_PC), .Update_Target(ID_NPC_Target), .Update_Taken(ID_Actual_Taken), .Mispredict_Real(Mispredict_Real)
     );
     
     IM U_IM (
         .addr(IF_PC[11:2]), .Ins(in_ins), .InsMemRW(InsMemRW), .clk(clk), .stall(StallD)
     );
     
-//——————IF到ID的寄存器——————//
+//------IF到ID的寄存器------//
     wire [31:0] out_ins; 
-    wire [31:0] ID_PC;
     wire FlushD;
     Flopr U_IF_ID_PC (
         .clk(clk), .rst(rst), .in_data(IF_PC), .out_data(ID_PC), .CLR(FlushD), .Stall(StallD)
@@ -35,7 +47,7 @@ module riscv(clk, rst);
         .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins), .flush(FlushD)
     );   
     
-//————————ID——————// 
+//--------ID------// 
     wire [1:0] NPCOp, WDSel, RegSel;
     wire [3:0] ALUOp;
     wire [6:0] opcode;
@@ -46,7 +58,6 @@ module riscv(clk, rst);
     wire [11:0] Imm12;
     wire [31:0] Imm32;
     wire [4:0] rs1, rs2,rd;
-    wire ID_Jump, ID_Branch;
     wire [20:1] Offset20;
     wire [11:0] Offset;
     wire [4:0] ID_rs1;
@@ -90,7 +101,20 @@ module riscv(clk, rst);
         .imm_in(Imm12), .ExtSel(ExtSel), .imm_out(Imm32)
     );
     
-//————————ID/EXE————————//
+    wire [31:0] ID_Forwarded_A;
+    wire [31:0] ID_Forwarded_B;
+    wire ID_Zero;
+    wire [31:0] ID_PCA4;
+    wire MEM_is_Load;
+    wire Branch_Stall;
+    wire ID_is_Jalr;
+                    
+    NPC U_NPC (
+        .PC(ID_PC), .NPCOp(NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs({ID_Forwarded_A[31:2],2'b00}),
+        .imm(Imm32), .PCA4(ID_PCA4),.NPC(ID_NPC_Target)//修改了rs接入的数
+    );
+
+//--------ID/EXE--------//
     wire [31:0] EX_PC, EX_Imm32, EX_Inst, EX_RD1, EX_RD2, EX_Offset_Packed;
     wire FlushE;
     
@@ -117,7 +141,7 @@ module riscv(clk, rst);
             };
     end
     
-//——————EXE——————//
+//------EXE------//
     wire [4:0] EX_rs1 = id_ex_ctrl_reg[32:28];
     wire [4:0] EX_rs2 = id_ex_ctrl_reg[27:23];
     wire EX_Branch      = id_ex_ctrl_reg[22];
@@ -139,18 +163,15 @@ module riscv(clk, rst);
     wire zero;
     wire [31:0] PCA4;  
     wire [31:0] Forwarded_A;
-    wire [31:0] Forwarded_B;//包含了前递情况的预先声明                
-    NPC U_NPC (
-        .PC(EX_PC), .NPCOp(EX_NPCOp), .Offset12(EX_Offset12), .Offset20(EX_Offset20), .rs({Forwarded_A[31:2],2'b00}),
-        .imm(EX_Imm32), .PCA4(PCA4),.NPC(EX_NPC_Target)//修改了rs接入的数
-    );
+    wire [31:0] Forwarded_B;//包含了前递情况的预先声明
+    assign PCA4 = EX_PC + 32'd4;
     
-    // 实例化 MUX_2to1_A——决定ALUA的操作数来源
+    // 实例化 MUX_2to1_A--决定ALUA的操作数来源
     MUX_2to1_A U_MUX_2to1_A (
         .X(Forwarded_A), .Y(5'h0), .control(EX_ALUSrcA), .out(A)
     );
 
-    // 实例化 MUX_3to1_B——ALUB的操作数来源
+    // 实例化 MUX_3to1_B--ALUB的操作数来源
     MUX_3to1_B U_MUX_3to1_B (
         .X(Forwarded_B), .Y(EX_Imm32), .Z(EX_Offset12), .control(EX_ALUSrcB), .out(B)
     );
@@ -159,12 +180,8 @@ module riscv(clk, rst);
     ALU U_ALU (
         .A(A), .B(B), .ALUOp(EX_ALUOp), .ALU_result(ALU_result), .zero(zero)
     );
-    
-    // 分支判定 (反馈给 IF 阶段)
-    wire EX_Branch_Cond_Met = (EX_funct3_0 == 1'b1) ? ~zero : zero;
-    assign EX_Control_Taken = EX_Jump || (EX_Branch && EX_Branch_Cond_Met);
 
-//————————EX/MEM——————//
+//--------EX/MEM------//
     wire [31:0] MEM_ALU_result, MEM_RD2, MEM_PCA4, MEM_Inst, mem_ctrl;
     
     reg [10:0] ex_mem_ctrl_reg;
@@ -181,7 +198,7 @@ module riscv(clk, rst);
     Flopr U_EXMEM_RD2  ( .clk(clk), .rst(rst), .in_data(Forwarded_B), .out_data(MEM_RD2),.CLR(1'b0), .Stall(1'b0) );
     Flopr U_EXMEM_PCA4 ( .clk(clk), .rst(rst), .in_data(PCA4), .out_data(MEM_PCA4),.CLR(1'b0), .Stall(1'b0) );
     
-//————————MEM————————//
+//--------MEM--------//
     wire [4:0] MEM_rd      = ex_mem_ctrl_reg[10:6];
     wire       MEM_DMCtrl  = ex_mem_ctrl_reg[5];
     wire       MEM_RFWrite = ex_mem_ctrl_reg[4];
@@ -193,7 +210,7 @@ module riscv(clk, rst);
     DM U_DM (
         .Addr(MEM_ALU_result[11:2]), .WD(MEM_RD2), .DMCtrl(MEM_DMCtrl), .clk(clk), .RD(RD)
     );
-//————————MEM/WB————————//
+//--------MEM/WB--------//
     wire [31:0] WB_ALU_result, WB_PCA4;
     
     reg [9:0] mem_wb_ctrl_reg;
@@ -208,7 +225,7 @@ module riscv(clk, rst);
     Flopr U_MEMWB_ALU  ( .clk(clk), .rst(rst), .in_data(MEM_ALU_result), .out_data(WB_ALU_result),.CLR(1'b0), .Stall(1'b0) );
     Flopr U_MEMWB_PCA4 ( .clk(clk), .rst(rst), .in_data(MEM_PCA4),       .out_data(WB_PCA4),.CLR(1'b0), .Stall(1'b0) );
     
-//————————WB————————//
+//--------WB--------//
     wire [4:0] WB_rd      = mem_wb_ctrl_reg[9:5];
     assign     WB_RFWrite = mem_wb_ctrl_reg[4];
     wire [1:0] WB_WDSel   = mem_wb_ctrl_reg[3:2];
@@ -226,7 +243,7 @@ module riscv(clk, rst);
         .control(WB_RegSel), .out(WB_WR)
     );
     
-//————————harzard unit————————//
+//--------harzard unit--------//
     wire EX_is_Load = (id_ex_ctrl_reg[3:2] == 2'b01); //看看WDSel最终写回的是哪里的数据
     wire [6:0] ID_opcode = out_ins[6:0];
     wire ID_reads_rs2 = (ID_opcode == 7'b0110011) || (ID_opcode == 7'b0100011) || (ID_opcode == 7'b1100011);
@@ -234,20 +251,22 @@ module riscv(clk, rst);
     wire Load_Use_Stall = EX_is_Load && (EX_rd != 5'd0) && 
                           ((ID_reads_rs1 && (EX_rd == ID_rs1)) || 
                            (ID_reads_rs2 && (EX_rd == ID_rs2)));
+                           
     reg Flush_Delay;
     always @(posedge clk or posedge rst) begin
         if (rst) 
             Flush_Delay <= 1'b0;
         else 
-            Flush_Delay <= EX_Control_Taken; // 记住上一拍的跳转状态
+            // 记住当前拍成功发生了跳转，延迟一拍去冲刷即将进入 ID 阶段的错误指令
+            Flush_Delay <= Mispredict_Real;
     end
-    
-    assign StallF = Load_Use_Stall;                       // 暂停 PC
-    assign StallD = Load_Use_Stall;                       // 暂停 IF/ID
-    assign FlushE = Load_Use_Stall || rst;   // 其实FlushD已经可以做到jmp的flush了，FlushE已经只用管load了
-    assign FlushD = EX_Control_Taken || Flush_Delay || rst;              // 清空 IF/ID (只有跳错时需要清空)
+                           
+    assign StallF = Load_Use_Stall || Branch_Stall;
+    assign StallD = Load_Use_Stall || Branch_Stall;
+    assign FlushE = Load_Use_Stall || Branch_Stall || rst;
+    assign FlushD = Flush_Delay || rst;
 
-//——————forward——————//
+//------forward------//
     wire [1:0] ForwardA;
     wire [1:0] ForwardB;
         
@@ -262,5 +281,30 @@ module riscv(clk, rst);
 
     assign Forwarded_B = (ForwardB == 2'b10) ? MEM_ALU_result :
                          (ForwardB == 2'b01) ? WB_WD : EX_RD2;
+                         
+    
+    // 1. ID 阶段前递：
+    // RF内部已包含 WB->ID 的写回优先前递，这里只需处理 MEM->ID 的前递。
+    // 注意：如果数据还在 EX 阶段产生，或者 MEM 阶段是 Load 指令，直接用 Stall 解决（见下方阻塞逻辑）
+    assign ID_Forwarded_A = ((MEM_RFWrite == 1'b1) && (MEM_rd != 5'h00) && (MEM_rd == ID_rs1)) ? MEM_ALU_result : RD1;
+    assign ID_Forwarded_B = ((MEM_RFWrite == 1'b1) && (MEM_rd != 5'h00) && (MEM_rd == ID_rs2)) ? MEM_ALU_result : RD2;
+
+    // 2. 提前在 ID 阶段完成比较
+    assign ID_Zero = (ID_Forwarded_A == ID_Forwarded_B);
+    // out_ins[12] 即 funct3[0]，0为BEQ，1为BNE
+    assign ID_Branch_Cond_Met = (out_ins[12] == 1'b1) ? ~ID_Zero : ID_Zero; 
+
+    // 3. 针对 ID 决断的专属阻塞逻辑 (Branch Stall)
+    // 凡是 Branch 或 JALR，如果它需要读取的寄存器目前正由 EX 阶段产生，或者正由 MEM 阶段的 Load 产生，则必须暂停一拍
+    assign ID_is_Jalr = (opcode == `INSTR_JALR_OP);
+    assign MEM_is_Load = (MEM_WDSel == 2'b01); 
+    assign Branch_Stall = (ID_Branch || ID_is_Jalr) && (
+                            (EX_RFWrite && (EX_rd != 5'd0) && ((EX_rd == ID_rs1) || (ID_Branch && EX_rd == ID_rs2))) ||
+                            (MEM_is_Load && (MEM_rd != 5'd0) && ((MEM_rd == ID_rs1) || (ID_Branch && MEM_rd == ID_rs2)))
+                          );
+    
+    // 如果发生了任何Stall，决断不能生效，防止错误跳跃
+    assign ID_Control_Taken_Real = ID_Actual_Taken && !Branch_Stall && !Load_Use_Stall;
+    
     
 endmodule
