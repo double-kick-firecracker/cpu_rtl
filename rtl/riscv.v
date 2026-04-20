@@ -3,8 +3,7 @@
 module riscv(clk, rst);
     input clk, rst;
         
-//----------IF--------// 
-//    wire        ID_Control_Taken_Real; // EX 阶段判断的结果：是否真要跳转 (Branch Taken 或 JAL/JALR)
+//----------IF--------//
     wire [31:0] ID_NPC_Target;    // EX 阶段 (NPC模块) 计算出的跳转目标地址
     wire [31:0] IF_PC;
     wire [31:0] IF_PC_plus_4;
@@ -235,7 +234,7 @@ module riscv(clk, rst);
     
     // 实例化 MUX_3to1_LMD--决定写回什么数据
     MUX_3to1_LMD U_MUX_3to1_LMD (
-        .X(WB_ALU_result), .Y(RD), .Z(WB_PCA4[31:2]),.Z_(WB_PCA4[1:0]),
+        .X(WB_ALU_result), .Y(RD), .Z(WB_PCA4[31:0]),
         .control(WB_WDSel), .out(WB_WD)
     );
     
@@ -306,9 +305,6 @@ module riscv(clk, rst);
                             (EX_RFWrite && (EX_rd != 5'd0) && ((EX_rd == ID_rs1) || (ID_Branch && EX_rd == ID_rs2))) ||
                             (MEM_is_Load && (MEM_rd != 5'd0) && ((MEM_rd == ID_rs1) || (ID_Branch && MEM_rd == ID_rs2)))
                           );
-    
-    // 如果发生了任何Stall，决断不能生效，防止错误跳跃
- //   assign ID_Control_Taken_Real = ID_Actual_Taken && !Branch_Stall && !Load_Use_Stall;
     
     
 endmodule
