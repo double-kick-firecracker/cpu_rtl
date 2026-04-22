@@ -3,7 +3,7 @@
 module riscv(clk, rst);
     input clk, rst;
         
-//----------IF--------//
+//----------IF--------// 
     wire [31:0] ID_NPC_Target;    // EX 阶段 (NPC模块) 计算出的跳转目标地址
     wire [31:0] IF_PC;
     wire [31:0] IF_PC_plus_4;
@@ -35,7 +35,7 @@ module riscv(clk, rst);
     );
     
     IM U_IM (
-        .addr(IF_PC[11:2]), .Ins(in_ins), .InsMemRW(InsMemRW), .clk(clk), .stall(StallD)
+        .addr(IF_PC[11:2]), .Ins(in_ins), .InsMemRW(InsMemRW), .clk(clk)
     );
     
 //------IF到ID的寄存器------//
@@ -46,7 +46,7 @@ module riscv(clk, rst);
     );      
                 
     IR U_IR (
-        .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins), .flush(FlushD)
+        .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins), .flush(FlushD), .stall(StallD), .rst(rst)
     );   
     
 //--------ID------// 
@@ -285,7 +285,6 @@ module riscv(clk, rst);
     assign Forwarded_B = (ForwardB == 2'b10) ? MEM_ALU_result :
                          (ForwardB == 2'b01) ? WB_WD : EX_RD2;
                          
-    
     // 1. ID 阶段前递：
     // RF内部已包含 WB->ID 的写回优先前递，这里只需处理 MEM->ID 的前递。
     // 注意：如果数据还在 EX 阶段产生，或者 MEM 阶段是 Load 指令，直接用 Stall 解决（见下方阻塞逻辑）
@@ -305,6 +304,4 @@ module riscv(clk, rst);
                             (EX_RFWrite && (EX_rd != 5'd0) && ((EX_rd == ID_rs1) || (ID_Branch && EX_rd == ID_rs2))) ||
                             (MEM_is_Load && (MEM_rd != 5'd0) && ((MEM_rd == ID_rs1) || (ID_Branch && MEM_rd == ID_rs2)))
                           );
-    
-    
 endmodule
