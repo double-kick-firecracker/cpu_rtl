@@ -10,7 +10,7 @@ module IR(in_ins, clk, IRWrite, out_ins, flush,stall,rst);   //该模块当作IF
     
     always @(posedge clk or posedge rst) begin
         if(rst)begin
-         flushD <= 0;
+         flushD <= 1;
          stallD <= 0;
        end
        else begin
