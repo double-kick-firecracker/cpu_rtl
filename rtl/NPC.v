@@ -41,16 +41,28 @@ module NPC(NPCOp, Offset12, Offset20, PC, rs, imm, PCA4, NPC,ID_RD1, ID_RD2,func
     
     assign Offset13 = $signed({Offset12[12:1], 1'b0});  //实际为13位
     assign Offset21 = $signed({Offset20[20:1], 1'b0});  //实际为21位
+    
+    reg [31:0] jump_target;
 
     always@(*) begin
         case(NPCOp)
-            `NPC_PC      : NPC = id_PC + 4;                          //顺序执行，32位CPU，地址每次加4——改流水线后已经冗余了
-            `NPC_Offset12: NPC = branch_condition_met ? ($signed({1'b0, id_PC}) + $signed(Offset13)) : (id_PC + 4);  //sb指令地址跳转，PC一直是正数，要加个0语法糖防止它变成负数
-            `NPC_rs      : NPC = rs + imm;                              //指令地址跳转为rs，jalr要改逻辑加个imm
-            `NPC_Offset20: NPC = $signed({1'b0, id_PC}) + $signed(Offset21);  //jal指令地址跳转
-            default      : NPC = id_PC + 4; 
+            `NPC_PC      : jump_target = id_PC + 4;//感觉是没什么用了
+            `NPC_Offset12: jump_target = branch_condition_met ? ($signed({1'b0, id_PC}) + $signed(Offset13)) : (id_PC + 4);  //sb指令地址跳转，PC一直是正数，要加个0语法糖防止它变成负数
+            `NPC_rs      : jump_target = rs + imm;                              //指令地址跳转为rs，jalr要改逻辑加个imm
+            `NPC_Offset20: jump_target = $signed({1'b0, id_PC}) + $signed(Offset21);  //jal指令地址跳转
+            default      : jump_target = id_PC + 4; //单纯防锁存
         endcase
         id_PCA4 = id_PC + 4;//单纯是用来给写回
+    end
+    
+    wire [31:0] NPC_4=PC+4;
+    
+    always @(*) begin
+        if (ID_Branch_Taken) begin
+            NPC = jump_target; // 发生跳转，把 ID 算出来的跳转地址扔给顶层 PC
+        end else begin
+            NPC = NPC_4; // 不跳转，把 IF 算出来的 PC+4 扔给顶层 PC
+        end
     end
     
     Flopr U_ID_EX_PCA4 ( .clk(clk), .rst(rst), .in_data(id_PCA4), .out_data(ex_PCA4),.CLR(FlushE), .Stall(1'b0) );
@@ -59,7 +71,7 @@ module NPC(NPCOp, Offset12, Offset20, PC, rs, imm, PCA4, NPC,ID_RD1, ID_RD2,func
         if(rst)
             PCA4 <= 0;    //复位后，输出为0
         else if(FlushE)
-            PCA4 <= 32'h0000_0013;
+            PCA4 <= 0;
         else
             PCA4 <= mem_PCA4;  //将输入数据输出
     end

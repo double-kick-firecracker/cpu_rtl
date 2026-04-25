@@ -14,7 +14,7 @@ module riscv(clk, rst);
     wire [4:0] rs1, rs2, rd, wb_rd;
     wire [11:0] Imm12;
     wire [31:0] Imm32,ex_imm32;
-    wire [20:1] Offset20,ex_Offset20;
+    wire [20:1] Offset20;
     wire [11:0] Offset,ex_Offset;
     wire [4:0] WR;
     wire [31:0] WD;
@@ -87,7 +87,7 @@ module riscv(clk, rst);
     // ?     EXT
     EXT U_EXT (
         .imm_in(Imm12), .ExtSel(ExtSel), .imm_out(Imm32),.FlushE(FlushE),.ex_imm32(ex_imm32),.Offset20(Offset20),.Offset(Offset),
-        .ex_Offset20(ex_Offset20),.ex_Offset(ex_Offset),.clk(clk),.rst(rst)//不对，传入mux和alu的是原版的offse 和 offset20,Imm32需要给NPC算jalr
+        .ex_Offset(ex_Offset),.clk(clk),.rst(rst)//不对，传入mux和alu的是原版的offse 和 offset20,Imm32需要给NPC算jalr
     );
 
 
@@ -111,12 +111,14 @@ module riscv(clk, rst);
     // ?     MUX_3to1_B，用于ALUB的来源
     MUX_3to1_B U_MUX_3to1_B (
         .X(RD2_r), .Y(Imm32), .Z(Offset), .control(ALUSrcB), .out(B),.mem_ALU_result(ALU_result_r),.wb_WD(WD),.ex_rs2(ex_rs2), 
-        .mem_rd(mem_rd), .wb_rd(wb_rd),.mem_RFWrite(mem_RFWrite), .wb_RFWrite(RFWrite)//这个offset估计得弃掉,这个Imm32也得弃掉
+        .mem_rd(mem_rd), .wb_rd(wb_rd),.mem_RFWrite(mem_RFWrite), .wb_RFWrite(RFWrite),//这个offset估计得弃掉,这个Imm32也得弃掉
+        .Y_2(ex_imm32),.Z_2(ex_Offset)
     );
 
     // ?     ALU
     ALU U_ALU (
-        .A(A), .B(B), .ALUOp(ALUOp), .ALU_result(ALU_result), .zero(zero),.ex_RD2(RD2_r),.mem_RD2(mem_RD2)
+        .A(A), .B(B), .ALUOp(ALUOp), .ALU_result(ALU_result), .zero(zero),.ex_RD2(RD2_r),.mem_RD2(mem_RD2),
+         .clk(clk), .rst(rst)
     );//RD2_r需要传入EX的MUX模块内，也需要传入DM内部，所以靠ALU多打一拍。
 
     // ?     Flopr————按理来说EX/MEM，所以最后的MUX我觉得应该另寻蹊跷了（
@@ -139,7 +141,7 @@ module riscv(clk, rst);
     // ?     MUX_3to1_LMD
     MUX_3to1_LMD U_MUX_3to1_LMD (
         .X(ALU_result_r), .Y(DR_out), .Z(PCA4),
-        .control(WDSel), .out(WD)
+        .control(WDSel), .out(WD), .clk(clk), .rst(rst)
     );//ALU_result_r在这里不能用了（恼）;不对，照样可以，ALU_result_r输入进去后用个flopr打一拍就可以了
     
     assign DR_out = RD;

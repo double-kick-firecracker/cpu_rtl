@@ -1,9 +1,9 @@
 `include "ctrl_signal_def.v"
 module MUX_3to1_B(X, Y, Z, control, out,mem_ALU_result,wb_WD,ex_rs2, mem_rd, wb_rd,
-                  mem_RFWrite, wb_RFWrite);
+                  mem_RFWrite, wb_RFWrite,Y_2,Z_2);
     input  signed [31:0] X;        //临时寄存器B中的内容
-    input  signed [31:0] Y;        //临时寄存器Imm中的内容
-    input         [11:0] Z;        //临时寄存器Offset中的内容
+    input  signed [31:0] Y,Y_2;        //临时寄存器Imm中的内容
+    input         [11:0] Z,Z_2;        //临时寄存器Offset中的内容
     input         [1:0]  control;  //选择控制信号
     output reg signed [31:0] out;   //输出选择结果
     
@@ -21,11 +21,11 @@ module MUX_3to1_B(X, Y, Z, control, out,mem_ALU_result,wb_WD,ex_rs2, mem_rd, wb_
     assign Forwarded_Data = (ForwardB == 2'b10) ? mem_ALU_result :
                             (ForwardB == 2'b01) ? wb_WD : X;
 
-    always @ (X or Y or Z or control) begin
+    always @ (X or Y_2 or Z_2 or control) begin
         case(control)
             `ALUSrcB_B      : out = Forwarded_Data;          //选择X
-            `ALUSrcB_Imm    : out = Y;          //选择Y
-            `ALUSrcB_Offset : out = $signed(Z); //选择Z（符号扩展为32位）
+            `ALUSrcB_Imm    : out = Y_2;          //选择Y
+            `ALUSrcB_Offset : out = $signed(Z_2); //选择Z（符号扩展为32位）
             `ALUSrcB_else   : out = Forwarded_Data;          //选择X
         endcase
     end
