@@ -52,7 +52,7 @@ module riscv(clk, rst);
         
     // ?     IR——需要好好研究的IR
     IR U_IR (
-        .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins), .flush(StallD),.stall(StallD)
+        .clk(clk), .IRWrite(IRWrite), .in_ins(in_ins), .out_ins(out_ins), .flush(FlushD),.stall(StallD),.rst(rst)
     );
 
     // ?     ControlUnit————ID

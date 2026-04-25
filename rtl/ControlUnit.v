@@ -28,7 +28,7 @@ module ControlUnit(
     output reg Jump,
     output reg Branch,//以上全部原本就有的接口都用作EXpipeline输出口
     output reg [4:0] ex_rs1, ex_rs2,wb_rd,
-    output reg StallF, StallD, FlushD, FlushE,
+    output StallF, StallD, FlushD, FlushE,
     output reg [4:0] mem_rd
 );
     reg id_RFWrite, id_DMCtrl, id_ALUSrcA, id_Jump, id_Branch;
@@ -176,34 +176,26 @@ end
     wire ID_is_Branch = (opcode == `INSTR_BTYPE_OP);
     wire id_reads_rs1 = (opcode != `INSTR_JAL_OP);
     wire id_reads_rs2 = (opcode == `INSTR_RTYPE_OP || opcode == `INSTR_SW_OP || ID_is_Branch);
+    wire ex_is_load   = (ex_WDSel == `WDSel_FromMEM);
+    wire mem_is_load  = (mem_WDSel == `WDSel_FromMEM);
 
-    wire load_use_stall = !ex_DMCtrl && (ex_rd != 5'd0) && 
+    wire load_use_stall = ex_is_load && (ex_rd != 5'd0) && 
                           ((id_reads_rs1 && (ex_rd == id_rs1)) || 
                            (id_reads_rs2 && (ex_rd == id_rs2)));
 
     // 3. Branch 数据冒险检测 (极度硬核：分支指令在 ID 就需要数据)
     // 规则A: 前一条是 ALU 指令或 Load 指令，且目标寄存器就是 Branch 需要的，必须停顿1拍等它到 MEM
-    wire branch_stall_EX  = ID_is_Branch && RFWrite && (ex_rd != 5'd0) && 
+    wire branch_stall_EX  = ID_is_Branch && ex_RFWrite && (ex_rd != 5'd0) && 
                             ((ex_rd == id_rs1) || (ex_rd == id_rs2));
     // 规则B: 前一条的前一条是 Load 指令，Branch 在 ID 阶段，Load 在 MEM 阶段，还没写回，停顿1拍
-    wire branch_stall_MEM = ID_is_Branch && !DMCtrl && (mem_rd != 5'd0) && 
+    wire branch_stall_MEM = ID_is_Branch && mem_is_load && (mem_rd != 5'd0) && 
                             ((mem_rd == id_rs1) || (mem_rd == id_rs2));
     wire branch_stall = branch_stall_EX || branch_stall_MEM;
 
     wire Stall_Global = load_use_stall || branch_stall;
     
-    always @(posedge clk or posedge rst) begin
-        if(rst)begin
-         StallF <= 0;
-         StallD <= 0; 
-         FlushE <= 0; 
-         FlushD <= 0;
-       end
-       else begin
-         StallF = Stall_Global;
-         StallD = Stall_Global; 
-         FlushE = Stall_Global; 
-         FlushD = ID_Branch_Taken && !Stall_Global;
-         end
-     end
+    assign StallF = Stall_Global;
+    assign StallD = Stall_Global; 
+    assign FlushE = Stall_Global; 
+    assign FlushD = ID_Branch_Taken && !Stall_Global;
 endmodule
