@@ -48,7 +48,7 @@ module NPC(NPCOp, Offset12, Offset20, PC, rs, imm, PCA4, NPC,ID_RD1, ID_RD2,func
         case(NPCOp)
             `NPC_PC      : jump_target = id_PC + 4;//感觉是没什么用了
             `NPC_Offset12: jump_target = branch_condition_met ? ($signed({1'b0, id_PC}) + $signed(Offset13)) : (id_PC + 4);  //sb指令地址跳转，PC一直是正数，要加个0语法糖防止它变成负数
-            `NPC_rs      : jump_target = forward_A_ID + imm;                              //指令地址跳转为rs，jalr要改逻辑加个imm
+            `NPC_rs      : jump_target = cmp_A + imm;                              //指令地址跳转为rs，jalr要改逻辑加个imm
             `NPC_Offset20: jump_target = $signed({1'b0, id_PC}) + $signed(Offset21);  //jal指令地址跳转
             default      : jump_target = id_PC + 4; //单纯防锁存
         endcase
@@ -66,12 +66,10 @@ module NPC(NPCOp, Offset12, Offset20, PC, rs, imm, PCA4, NPC,ID_RD1, ID_RD2,func
     end
     
     Flopr U_ID_EX_PCA4 ( .clk(clk), .rst(rst), .in_data(id_PCA4), .out_data(ex_PCA4),.CLR(FlushE), .Stall(1'b0) );
-    Flopr U_EX_MEM_PCA4 ( .clk(clk), .rst(rst), .in_data(ex_PCA4),.out_data(mem_PCA4),.CLR(FlushE), .Stall(1'b0) );
+    Flopr U_EX_MEM_PCA4 ( .clk(clk), .rst(rst), .in_data(ex_PCA4),.out_data(mem_PCA4),.CLR(1'b0), .Stall(1'b0) );
     always @(posedge clk or posedge rst) begin
         if(rst)
             PCA4 <= 0;    //复位后，输出为0
-        else if(FlushE)
-            PCA4 <= 0;
         else
             PCA4 <= mem_PCA4;  //将输入数据输出
     end
