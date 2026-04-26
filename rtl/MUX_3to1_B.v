@@ -22,7 +22,7 @@ module MUX_3to1_B(X, Y, Z, control, out,mem_ALU_result,wb_WD,ex_rs2, mem_rd, wb_
     assign Forwarded_Data = (ForwardB == 2'b10) ? mem_ALU_result :
                             (ForwardB == 2'b01) ? wb_WD : X;
 
-    always @ (X or Y_2 or Z_2 or control) begin
+    always @ (Forwarded_Data or Y_2 or Z_2 or control) begin
         case(control)
             `ALUSrcB_B      : out = Forwarded_Data;          //选择X
             `ALUSrcB_Imm    : out = Y_2;          //选择Y

@@ -12,6 +12,7 @@ module MUX_3to1(X, Y, Z, control, out,wb_rd);
             `RegSel_rt  : out = Y;  //选择Y——MIPS残留
             `RegSel_31  : out = Z;  //选择Z
             `RegSel_else: out = 0;
+            default     : out = 0;
         endcase
     end
 endmodule

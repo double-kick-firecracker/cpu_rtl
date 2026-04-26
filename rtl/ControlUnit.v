@@ -32,11 +32,10 @@ module ControlUnit(
     output reg [4:0] mem_rd
 );
     reg id_RFWrite, id_DMCtrl, id_ALUSrcA, id_Jump, id_Branch;
-    reg [1:0] id_ALUSrcB, id_RegSel, id_WDSel;
+    reg [1:0] id_ALUSrcB, id_RegSel, id_WDSel,mem_WDSel,ex_WDSel;
     reg [3:0] id_ALUOp;
     reg ex_RFWrite;
     reg ex_DMCtrl;
-    reg mem_WDSel,ex_WDSel;
     reg [1:0] ALU_category ; //对ALU计算模式的细分
     reg [1:0] mem_RegSel,ex_RegSel;
     reg [4:0] ex_rd;
@@ -124,9 +123,16 @@ always @(*) begin
 end
 
     always @(posedge clk or posedge rst) begin
-        if (rst || FlushE) begin
+        if (rst) begin
             ALUOp <= 0; ALUSrcB <= 0; ex_WDSel <= 0; ex_RegSel <= 0;
             ALUSrcA <= 0; ex_DMCtrl <= 0; ex_RFWrite <= 0; Jump <= 0; Branch <= 0;
+            ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;
+        end
+        else if (FlushE) begin
+            ALUOp <= 0;
+            ALUSrcB <= 0; ex_WDSel <= 0; ex_RegSel <= 0;
+            ALUSrcA <= 0; ex_DMCtrl <= 0; ex_RFWrite <= 0;
+            Jump <= 0; Branch <= 0;
             ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;
         end
         else begin

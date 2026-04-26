@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
 
 `include "ctrl_signal_def.v"
-module PC(clk, rst, PCWrite,StallF, NPC, PC,FlushD,StallD,id_PC,FlushE);
-    input         clk,FlushD,StallD,FlushE;        //时钟信号
+module PC(clk, rst, PCWrite,StallF, NPC, PC,FlushD,StallD,id_PC);
+    input         clk,FlushD,StallD;        //时钟信号
     input         rst;        //复位信号
     input         PCWrite;    //PC写使能信号
     input  [31:0] NPC;        //下条指令的地址

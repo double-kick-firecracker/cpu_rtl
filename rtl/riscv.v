@@ -41,7 +41,7 @@ module riscv(clk, rst);
     // ?     PC————IF阶段
     PC U_PC (
         .clk(clk), .rst(rst), .PCWrite(PCWrite), .NPC(NPC), .PC(PC),.FlushD(FlushD),.StallD(StallD),
-        .id_PC(id_PC),.FlushE(FlushE),.StallF(StallF)   //呃呃，PCwrite可不可以当作stallD用啊，到时候研究一下啊
+        .id_PC(id_PC),.StallF(StallF)   //呃呃，PCwrite可不可以当作stallD用啊，到时候研究一下啊
     );                                                  //PC直接输入到IM，PC在ID阶段不需要，直接传到EX阶段——不对，NPC决策提前了，传到ID
     
     // ?     IM
@@ -82,7 +82,7 @@ module riscv(clk, rst);
         .imm(Imm32),.id_PC(id_PC),.clk(clk),.rst(rst), .FlushE(FlushE),.ID_RD1(RD1), .ID_RD2(RD2),.funct3_0(Funct3[0]),
         .ID_rs1(rs1), .ID_rs2(rs2),.MEM_ALU_result(ALU_result_r),.MEM_rd(mem_rd),.MEM_RFWrite(mem_RFWrite),
         .ID_Branch_Taken(ID_Branch_Taken)
-    );//PC由于跨阶段了，所以不要了），自己创造一个接口；PCA4直接去到WB阶段
+    );//PC由于跨阶段了，所以不要了），自己创造一个接口；PCA4直接去到WB阶段;rs接入的数值是RD1，所以要考虑前递的情况！
 
     // ?     EXT
     EXT U_EXT (

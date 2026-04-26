@@ -7,15 +7,20 @@ module IR(in_ins, clk, IRWrite, out_ins, flush,stall,rst);   //该模块当作IF
     output reg [31:0] out_ins;   //指令输出
     
     reg flushD,stallD;
+    reg [31:0] hold_ins;
     
     always @(posedge clk or posedge rst) begin
         if(rst)begin
          flushD <= 1;
          stallD <= 0;
+         hold_ins<=32'h0000_0013;
        end
        else begin
          flushD <= flush;
          stallD <= stall; 
+         if (!stallD) begin
+                hold_ins <= in_ins;
+            end
          end
      end
     
@@ -23,7 +28,7 @@ module IR(in_ins, clk, IRWrite, out_ins, flush,stall,rst);   //该模块当作IF
         if(flushD)
             out_ins=32'h0000_0013;
         else if(stallD)
-            out_ins=out_ins;
+            out_ins=hold_ins;//防止产生latch
         else
             out_ins=in_ins;
     end

@@ -1,5 +1,5 @@
 `include "ctrl_signal_def.v"
-module EXT(imm_in, ExtSel, imm_out,FlushE,ex_imm32,Offset20,Offset,ex_Offset20,ex_Offset,
+module EXT(imm_in, ExtSel, imm_out,FlushE,ex_imm32,Offset20,Offset,ex_Offset,
             clk,rst);    //搞了半天其实只拓展了itype
     input  [11:0]  imm_in;    // 输入的12位立即数
     input          ExtSel,FlushE,clk,rst;    // 扩展选择控制信号
@@ -7,7 +7,6 @@ module EXT(imm_in, ExtSel, imm_out,FlushE,ex_imm32,Offset20,Offset,ex_Offset20,e
     output [31:0] ex_imm32;
     input  [19:0] Offset20;
     input  [11:0] Offset;
-    output reg [19:0] ex_Offset20;
     output reg [11:0] ex_Offset;
     
     always @(imm_in or ExtSel) begin
@@ -22,11 +21,9 @@ module EXT(imm_in, ExtSel, imm_out,FlushE,ex_imm32,Offset20,Offset,ex_Offset20,e
      
      always @(posedge clk or posedge rst) begin
         if (rst) begin
-            ex_Offset20 <= 0;
             ex_Offset   <= 0;
         end    
         else begin
-            ex_Offset20 <= Offset20;
             ex_Offset   <= Offset;
         end
     end

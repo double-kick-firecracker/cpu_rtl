@@ -48,7 +48,7 @@ module NPC(NPCOp, Offset12, Offset20, PC, rs, imm, PCA4, NPC,ID_RD1, ID_RD2,func
         case(NPCOp)
             `NPC_PC      : jump_target = id_PC + 4;//感觉是没什么用了
             `NPC_Offset12: jump_target = branch_condition_met ? ($signed({1'b0, id_PC}) + $signed(Offset13)) : (id_PC + 4);  //sb指令地址跳转，PC一直是正数，要加个0语法糖防止它变成负数
-            `NPC_rs      : jump_target = rs + imm;                              //指令地址跳转为rs，jalr要改逻辑加个imm
+            `NPC_rs      : jump_target = forward_A_ID + imm;                              //指令地址跳转为rs，jalr要改逻辑加个imm
             `NPC_Offset20: jump_target = $signed({1'b0, id_PC}) + $signed(Offset21);  //jal指令地址跳转
             default      : jump_target = id_PC + 4; //单纯防锁存
         endcase
