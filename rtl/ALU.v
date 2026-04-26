@@ -2,14 +2,12 @@
 `include "ctrl_signal_def.v"
 `include "instruction_def.v"
 
-module ALU(A,B,ALUOp,zero,ALU_result,ex_RD2,mem_RD2);
+module ALU(A,B,ALUOp,zero,ALU_result);
     input signed [31:0] A;
     input signed [31:0] B;
     input [3:0] ALUOp;
-    input [31:0] ex_RD2;
     output zero;
     output reg signed [31:0] ALU_result;
-    output [31:0] mem_RD2;
     
     always @(*)begin
         case(ALUOp)
@@ -26,6 +24,4 @@ module ALU(A,B,ALUOp,zero,ALU_result,ex_RD2,mem_RD2);
     end
     
     assign zero = (ALU_result == 32'sd0);
-    
-    Flopr U_EX_MEM_RD2  ( .clk(clk), .rst(rst), .in_data(ex_RD2), .out_data(mem_RD2),.CLR(1'b0), .Stall(1'b0) );
 endmodule

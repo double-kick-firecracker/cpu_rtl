@@ -112,13 +112,13 @@ module riscv(clk, rst);
     MUX_3to1_B U_MUX_3to1_B (
         .X(RD2_r), .Y(Imm32), .Z(Offset), .control(ALUSrcB), .out(B),.mem_ALU_result(ALU_result_r),.wb_WD(WD),.ex_rs2(ex_rs2), 
         .mem_rd(mem_rd), .wb_rd(wb_rd),.mem_RFWrite(mem_RFWrite), .wb_RFWrite(RFWrite),//这个offset估计得弃掉,这个Imm32也得弃掉
-        .Y_2(ex_imm32),.Z_2(ex_Offset)
+        .Y_2(ex_imm32),.Z_2(ex_Offset),.Forwarded_Data_mem(mem_RD2),
+         .clk(clk), .rst(rst)
     );
 
     // ?     ALU
     ALU U_ALU (
-        .A(A), .B(B), .ALUOp(ALUOp), .ALU_result(ALU_result), .zero(zero),.ex_RD2(RD2_r),.mem_RD2(mem_RD2),
-         .clk(clk), .rst(rst)
+        .A(A), .B(B), .ALUOp(ALUOp), .ALU_result(ALU_result), .zero(zero)
     );//RD2_r需要传入EX的MUX模块内，也需要传入DM内部，所以靠ALU多打一拍。
 
     // ?     Flopr————按理来说EX/MEM，所以最后的MUX我觉得应该另寻蹊跷了（
