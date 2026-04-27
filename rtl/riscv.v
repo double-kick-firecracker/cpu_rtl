@@ -18,7 +18,7 @@ module riscv(clk, rst);
     wire [11:0] Offset,ex_Offset;
     wire [4:0] WR;
     wire [31:0] WD;
-    wire [31:0] RD1, RD1_r, RD2, RD2_r,mem_RD2;
+    wire [31:0] RD1, RD1_r, RD2, RD2_r,ex_RD2;
     wire [31:0] A, B, ALU_result, ALU_result_r;
     wire [31:0] id_PC,ex_PC;
     wire StallF,StallD,FlushE,FlushD;
@@ -26,6 +26,7 @@ module riscv(clk, rst);
     wire EX_Jump_Taken;
     wire mem_RFWrite;
     wire Funct3_0;
+    wire wb_RD;
 
     assign opcode   = out_ins[6:0];
     assign Funct3   = out_ins[14:12];
@@ -105,7 +106,7 @@ module riscv(clk, rst);
     MUX_3to1_B U_MUX_3to1_B (
         .X(RD2_r), .Y(Imm32), .Z(Offset), .control(ALUSrcB), .out(B),.mem_ALU_result(ALU_result_r),.wb_WD(WD),.ex_rs2(ex_rs2), 
         .mem_rd(mem_rd), .wb_rd(wb_rd),.mem_RFWrite(mem_RFWrite), .wb_RFWrite(RFWrite),//这个offset估计得弃掉,这个Imm32也得弃掉
-        .Y_2(ex_imm32),.Z_2(ex_Offset),.Forwarded_Data_mem(mem_RD2),
+        .Y_2(ex_imm32),.Z_2(ex_Offset),.Forwarded_Data(ex_RD2),
          .clk(clk), .rst(rst)
     );
 
@@ -131,9 +132,9 @@ module riscv(clk, rst);
 
     // ?     DM
     DM U_DM (
-        .Addr(ALU_result_r[11:2]), .WD(RD2_r), .DMCtrl(DMCtrl), .clk(clk), .RD(RD),.WD2(mem_RD2)
+        .Addr(ALU_result_r[11:2]), .WD(RD2_r), .DMCtrl(DMCtrl), .clk(clk), .RD(RD),.WD2(ex_RD2),.Addr_2(ALU_result[11:2])
     );//ALU_result_r只用于这一处，其他另辟蹊径；WD不能用了，传送的是EX的，把内部WD相关数据替换为了mem_RD2
-      //RD实际上就是WB的，DM作为flopr之一
+      //RD实际上就是WB的，DM作为flopr之一;试试看不用ALU的Flopr打拍，省时序用的
     
         // ?     MUX_3to1----WB
     MUX_3to1 U_MUX_3to1 (

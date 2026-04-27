@@ -9,12 +9,15 @@ module MUX_3to1_LMD(X, Y, Z, control, out,clk,rst);
     output reg [31:0] out;   //输出选择结果
     wire [31:0] X_WB;
     input clk,rst;
+    wire [31:0] Y_wb;
+    
     Flopr U_MEM_WB_X  ( .clk(clk), .rst(rst), .in_data(X), .out_data(X_WB),.CLR(1'b0), .Stall(1'b0) );
+    Flopr U_MEM_WB_ED (.clk(clk), .rst(rst), .in_data(Y), .out_data(Y_wb),.CLR(1'b0),.Stall(1'b0));
 
-    always @ (X_WB or Y or Z or control) begin
+    always @ (X_WB or Y_wb or Z or control) begin
         case(control)
             `WDSel_FromALU  : out = X_WB;  //选择X
-            `WDSel_FromMEM  : out = Y;  //选择Y
+            `WDSel_FromMEM  : out = Y_wb;  //选择Y
             `WDSel_FromPC   : out = Z;  //选择Z
             `WDSel_Else     : out = 0;
             default         : out = 0;

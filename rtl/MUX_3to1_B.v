@@ -1,6 +1,6 @@
 `include "ctrl_signal_def.v"
 module MUX_3to1_B(X, Y, Z, control, out,mem_ALU_result,wb_WD,ex_rs2, mem_rd, wb_rd,
-                  mem_RFWrite, wb_RFWrite,Y_2,Z_2,Forwarded_Data_mem,clk,rst);
+                  mem_RFWrite, wb_RFWrite,Y_2,Z_2,Forwarded_Data,clk,rst);
     input  signed [31:0] X;        //临时寄存器B中的内容
     input  signed [31:0] Y,Y_2;        //临时寄存器Imm中的内容
     input         [11:0] Z,Z_2;        //临时寄存器Offset中的内容
@@ -11,8 +11,8 @@ module MUX_3to1_B(X, Y, Z, control, out,mem_ALU_result,wb_WD,ex_rs2, mem_rd, wb_
     input [31:0] wb_WD;          // 上上条指令准备写回的结果 (WB 阶段前递)
     input [4:0] ex_rs2, mem_rd, wb_rd;
     input mem_RFWrite, wb_RFWrite;
-    output [31:0]Forwarded_Data_mem;
-    wire [31:0] Forwarded_Data;
+//    output [31:0]Forwarded_Data_mem;
+    output [31:0] Forwarded_Data;
     
     wire [1:0] ForwardB;
     // 前递优先级：MEM 阶段优先于 WB 阶段 (因为 MEM 更新)
@@ -32,7 +32,7 @@ module MUX_3to1_B(X, Y, Z, control, out,mem_ALU_result,wb_WD,ex_rs2, mem_rd, wb_
         endcase
     end
     
-    Flopr U_EX_MEM_RD2 (
-        .clk(clk), .rst(rst), .in_data(Forwarded_Data), .out_data(Forwarded_Data_mem),.CLR(1'b0),.Stall(1'b0)
-    );
+//    Flopr U_EX_MEM_RD2 (
+//        .clk(clk), .rst(rst), .in_data(Forwarded_Data), .out_data(Forwarded_Data_mem),.CLR(1'b0),.Stall(1'b0)
+//    );
 endmodule

@@ -35,7 +35,7 @@ module ControlUnit(
     reg [1:0] id_ALUSrcB, id_RegSel, id_WDSel,mem_WDSel,ex_WDSel,id_NPCOp;
     reg [3:0] id_ALUOp;
     reg ex_RFWrite;
-    reg ex_DMCtrl;
+//    reg ex_DMCtrl;
     reg [1:0] ALU_category ; //对ALU计算模式的细分
     reg [1:0] mem_RegSel,ex_RegSel;
     reg [4:0] ex_rd;
@@ -125,28 +125,28 @@ end
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             ALUOp <= 0; ALUSrcB <= 0; ex_WDSel <= 0; ex_RegSel <= 0;
-            ALUSrcA <= 0; ex_DMCtrl <= 0; ex_RFWrite <= 0;
+            ALUSrcA <= 0; DMCtrl <= 0; ex_RFWrite <= 0;
             ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;NPCOp<=0;
             Funct3_0<=0;
         end
         else if (FlushE) begin
             ALUOp <= 0;
             ALUSrcB <= 0; ex_WDSel <= 0; ex_RegSel <= 0;
-            ALUSrcA <= 0; ex_DMCtrl <= 0; ex_RFWrite <= 0;NPCOp<=0;
+            ALUSrcA <= 0; DMCtrl <= 0; ex_RFWrite <= 0;NPCOp<=0;
             ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;
-            Funct3_0<=Funct3[0];
+            Funct3_0<=0;
         end
         else begin
             ALUOp <= id_ALUOp; ALUSrcB <= id_ALUSrcB; 
             ex_WDSel <= id_WDSel; ex_RegSel <= id_RegSel; ALUSrcA <= id_ALUSrcA; 
-            ex_DMCtrl <= id_DMCtrl; ex_RFWrite <= id_RFWrite; NPCOp<=id_NPCOp;
-            ex_rs1 <= id_rs1; ex_rs2 <= id_rs2; ex_rd <= id_rd;
+            DMCtrl <= id_DMCtrl; ex_RFWrite <= id_RFWrite; NPCOp<=id_NPCOp;
+            ex_rs1 <= id_rs1; ex_rs2 <= id_rs2; ex_rd <= id_rd; Funct3_0<=Funct3[0];
         end
     end
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            DMCtrl  <= 0;
+//            DMCtrl  <= 0;
             mem_RFWrite <= 0;
             mem_WDSel   <= 0;
             mem_rd      <= 5'b0;
@@ -154,7 +154,7 @@ end
         end 
         else begin
             // 数据往下级流动
-            DMCtrl  <= ex_DMCtrl;
+//            DMCtrl  <= ex_DMCtrl;
             mem_RFWrite <= ex_RFWrite;
             mem_WDSel   <= ex_WDSel;
             mem_rd      <= ex_rd;
