@@ -11,7 +11,7 @@ module ControlUnit(
     input [6:0] Funct7, //
     input [2:0] Funct3, //
     input [4:0] id_rs1, id_rs2, id_rd,
-    input ID_Branch_Taken,        // 来自 NPC 的分支判定结果
+    input EX_Jump_Taken,        // 来自 NPC 的分支判定结果
     
     output reg PCWrite, //是否更新PC
     output reg InsMemRW,//是否取指令
@@ -24,15 +24,15 @@ module ControlUnit(
     output reg [1:0] RegSel, //写回RF的地址选择
     output reg [1:0] NPCOp,  //NPC的数值来源
     output reg [1:0] WDSel,  //写回data的来源
-    output reg [3:0] ALUOp,   //ALU计算模式   
-    output reg Jump,
-    output reg Branch,//以上全部原本就有的接口都用作EXpipeline输出口
+    output reg [3:0] ALUOp,   //ALU计算模式
+    //以上全部原本就有的接口都用作EXpipeline输出口
     output reg [4:0] ex_rs1, ex_rs2,wb_rd,
     output StallF, StallD, FlushD, FlushE,
-    output reg [4:0] mem_rd
+    output reg [4:0] mem_rd,
+    output reg Funct3_0
 );
     reg id_RFWrite, id_DMCtrl, id_ALUSrcA, id_Jump, id_Branch;
-    reg [1:0] id_ALUSrcB, id_RegSel, id_WDSel,mem_WDSel,ex_WDSel;
+    reg [1:0] id_ALUSrcB, id_RegSel, id_WDSel,mem_WDSel,ex_WDSel,id_NPCOp;
     reg [3:0] id_ALUOp;
     reg ex_RFWrite;
     reg ex_DMCtrl;
@@ -49,7 +49,7 @@ module ControlUnit(
         id_ALUSrcB  = `ALUSrcB_B;     // 默认rs2
         id_RegSel   = `RegSel_rd;     // 默认写回来源于rd
         id_WDSel    = `WDSel_FromALU; // 默认写回数据来自ALU
-        NPCOp    = `NPC_PC;        // 默认+4
+        id_NPCOp    = `NPC_PC;        // 默认+4
         ExtSel   = `ExtSel_SIGNED;   // 默认有符号拓展
         ALU_category = 2'b00;      // 默认用加法
         id_Jump     = 1'b0;
@@ -77,19 +77,19 @@ module ControlUnit(
             end
             `INSTR_BTYPE_OP: begin
                 ALU_category = 2'b01;
-                NPCOp    = `NPC_Offset12;
+                id_NPCOp    = `NPC_Offset12;
                 id_Branch   = 1'b1;
             end
             `INSTR_JAL_OP: begin
                 id_RFWrite      = 1'b1;
                 id_WDSel        = `WDSel_FromPC;  // 将 PC+4 写入 rd
-                NPCOp        = `NPC_Offset20;  // 触发 JAL 跳转
+                id_NPCOp        = `NPC_Offset20;  // 触发 JAL 跳转
                 id_Jump         = 1'b1;
             end
             `INSTR_JALR_OP: begin
                 id_RFWrite      = 1'b1;
                 id_WDSel        = `WDSel_FromPC;  // 将 PC+4 写入 rd
-                NPCOp        = `NPC_rs;        // 触发 JALR 跳转，且imm有符号
+                id_NPCOp        = `NPC_rs;        // 触发 JALR 跳转，且imm有符号
                 id_ALUSrcB      = `ALUSrcB_Imm;
                 id_Jump         = 1'b1;
             end
@@ -125,21 +125,21 @@ end
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             ALUOp <= 0; ALUSrcB <= 0; ex_WDSel <= 0; ex_RegSel <= 0;
-            ALUSrcA <= 0; ex_DMCtrl <= 0; ex_RFWrite <= 0; Jump <= 0; Branch <= 0;
-            ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;
+            ALUSrcA <= 0; ex_DMCtrl <= 0; ex_RFWrite <= 0;
+            ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;NPCOp<=0;
+            Funct3_0<=0;
         end
         else if (FlushE) begin
             ALUOp <= 0;
             ALUSrcB <= 0; ex_WDSel <= 0; ex_RegSel <= 0;
-            ALUSrcA <= 0; ex_DMCtrl <= 0; ex_RFWrite <= 0;
-            Jump <= 0; Branch <= 0;
+            ALUSrcA <= 0; ex_DMCtrl <= 0; ex_RFWrite <= 0;NPCOp<=0;
             ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;
+            Funct3_0<=Funct3[0];
         end
         else begin
             ALUOp <= id_ALUOp; ALUSrcB <= id_ALUSrcB; 
             ex_WDSel <= id_WDSel; ex_RegSel <= id_RegSel; ALUSrcA <= id_ALUSrcA; 
-            ex_DMCtrl <= id_DMCtrl; ex_RFWrite <= id_RFWrite; 
-            Jump <= id_Jump; Branch <= id_Branch;
+            ex_DMCtrl <= id_DMCtrl; ex_RFWrite <= id_RFWrite; NPCOp<=id_NPCOp;
             ex_rs1 <= id_rs1; ex_rs2 <= id_rs2; ex_rd <= id_rd;
         end
     end
@@ -179,29 +179,16 @@ end
     end
     
 //——————冒险检测单元——————用always语句来搞个时序，好像就可以了//
-    wire ID_is_Branch = (opcode == `INSTR_BTYPE_OP);
     wire id_reads_rs1 = (opcode != `INSTR_JAL_OP);
-    wire id_reads_rs2 = (opcode == `INSTR_RTYPE_OP || opcode == `INSTR_SW_OP || ID_is_Branch);
+    wire id_reads_rs2 = (opcode == `INSTR_RTYPE_OP || opcode == `INSTR_SW_OP || opcode == `INSTR_BTYPE_OP);
     wire ex_is_load   = (ex_WDSel == `WDSel_FromMEM);
-    wire mem_is_load  = (mem_WDSel == `WDSel_FromMEM);
 
     wire load_use_stall = ex_is_load && (ex_rd != 5'd0) && 
                           ((id_reads_rs1 && (ex_rd == id_rs1)) || 
                            (id_reads_rs2 && (ex_rd == id_rs2)));
-
-    // 3. Branch 数据冒险检测 (极度硬核：分支指令在 ID 就需要数据)
-    // 规则A: 前一条是 ALU 指令或 Load 指令，且目标寄存器就是 Branch 需要的，必须停顿1拍等它到 MEM
-    wire branch_stall_EX  = ID_is_Branch && ex_RFWrite && (ex_rd != 5'd0) && 
-                            ((ex_rd == id_rs1) || (ex_rd == id_rs2));
-    // 规则B: 前一条的前一条是 Load 指令，Branch 在 ID 阶段，Load 在 MEM 阶段，还没写回，停顿1拍
-    wire branch_stall_MEM = ID_is_Branch && mem_is_load && (mem_rd != 5'd0) && 
-                            ((mem_rd == id_rs1) || (mem_rd == id_rs2));
-    wire branch_stall = branch_stall_EX || branch_stall_MEM;
-
-    wire Stall_Global = load_use_stall || branch_stall;
     
-    assign StallF = Stall_Global;
-    assign StallD = Stall_Global; 
-    assign FlushE = Stall_Global; 
-    assign FlushD = ID_Branch_Taken && !Stall_Global;
+    assign StallF = load_use_stall;
+    assign StallD = load_use_stall; 
+    assign FlushE = load_use_stall || EX_Jump_Taken; 
+    assign FlushD = EX_Jump_Taken;
 endmodule
