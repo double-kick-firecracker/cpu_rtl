@@ -23,9 +23,8 @@ module riscv(clk, rst);
     wire [31:0] id_PC,ex_PC;
     wire StallF,StallD,FlushE,FlushD;
     wire [4:0] ex_rs1, ex_rs2,mem_rd;
-    wire EX_Jump_Taken;
+    wire ID_Branch_Taken;
     wire mem_RFWrite;
-    wire Funct3_0;
     wire wb_RD;
 
     assign opcode   = out_ins[6:0];
@@ -42,13 +41,13 @@ module riscv(clk, rst);
     // ?     PC————IF阶段
     PC U_PC (
         .clk(clk), .rst(rst), .PCWrite(PCWrite), .NPC(NPC), .PC(PC),.FlushD(FlushD),.StallD(StallD),
-        .StallF(StallF),.FlushE(FlushE),.ex_PC(ex_PC)   //呃呃，PCwrite可不可以当作stallD用啊，到时候研究一下啊
+        .StallF(StallF),.FlushE(FlushE),.id_PC(id_PC)   //呃呃，PCwrite可不可以当作stallD用啊，到时候研究一下啊
     );                                                  //PC直接输入到IM，PC在ID阶段不需要，直接传到EX阶段
     
     // ?     IM
     IM U_IM (
-        .addr(PC[11:2]), .Ins(in_ins), .InsMemRW(InsMemRW),.clk(clk)
-    );//InsMemRW没什么用感觉，IM到时候想办法按SRAM标准改
+        .addr(PC[11:2]), .Ins(in_ins), .InsMemRW(InsMemRW),.clk(clk),.addr_2(NPC[11:2])
+    );//InsMemRW没什么用感觉，IM到时候想办法按SRAM标准改;为了满足时序，addr也不能要了
     
         
     // ?     IR——需要好好研究的IR
@@ -63,8 +62,7 @@ module riscv(clk, rst);
         .ExtSel(ExtSel), .ALUOp(ALUOp), .NPCOp(NPCOp), .ALUSrcA(ALUSrcA),.mem_RFWrite(mem_RFWrite),
         .WDSel(WDSel), .ALUSrcB(ALUSrcB), .RegSel(RegSel),.id_rs1(rs1),.id_rs2(rs2), .id_rd(rd),
         .ex_rs1(ex_rs1),.ex_rs2(ex_rs2),.mem_rd(mem_rd),
-        .EX_Jump_Taken(EX_Jump_Taken),.StallF(StallF),.StallD(StallD), .FlushD(FlushD), .FlushE(FlushE),.wb_rd(wb_rd),
-        .Funct3_0(Funct3_0)
+        .ID_Branch_Taken(ID_Branch_Taken),.StallF(StallF),.StallD(StallD), .FlushD(FlushD), .FlushE(FlushE),.wb_rd(wb_rd)
     );//由于决策提前，NPCOp不需要传两级了,其余都是经过内部flopr传入EX或更远的
       //RFWrite貌似只需要最后WB的时候使用;DMCtrl只在mem需要使用；WDSel传到WB阶段；RegSel最终会传到WB;funct3_0用于分支判定，直接ID阶段NPC自取删除
       //ID_Branch_Taken由NPC传入；id_rs1/2给RF，ex_rs1/2给MUX前递；ex_rd用于cu内部冒险检测，不需要接口，rd是顶层的assign。最终会直通MUX，MUX应该
@@ -84,6 +82,15 @@ module riscv(clk, rst);
         .ex_Offset(ex_Offset),.clk(clk),.rst(rst),.ex_Offset20(ex_Offset20)//不对，传入mux和alu的是原版的offse 和 offset20,Imm32需要给NPC算jalr
     );
 
+      
+    // ?     NPC--现在NPC又变回的人了（悲
+    NPC U_NPC (
+        .PC(PC), .NPCOp(NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs({RD1[31:2],2'b00}), .PCA4(PCA4), .NPC(NPC),
+        .imm(Imm32),.id_PC(id_PC),.clk(clk),.rst(rst), .FlushE(FlushE),.ID_RD1(RD1), .ID_RD2(RD2),.funct3_0(Funct3[0]),
+        .ID_rs1(rs1), .ID_rs2(rs2),.MEM_ALU_result(ALU_result_r),.MEM_rd(mem_rd),.MEM_RFWrite(mem_RFWrite),
+        .ID_Branch_Taken(ID_Branch_Taken),.stallF(StallF)
+    );//PC由于跨阶段了，所以不要了），自己创造一个接口；PCA4直接去到WB阶段;rs接入的数值是RD1，所以要考虑前递的情况！
+      //offset也废了，rs的RD1也不能要了
 
     // ?     Flopr  ID_EX pipeline reg
     Flopr U_A (
@@ -114,15 +121,6 @@ module riscv(clk, rst);
     ALU U_ALU (
         .A(A), .B(B), .ALUOp(ALUOp), .ALU_result(ALU_result), .zero(zero)
     );//RD2_r需要传入EX的MUX模块内，也需要传入DM内部，所以靠ALU多打一拍。
-
-      
-    // ?     NPC--现在NPC又变回的人了（悲
-    NPC U_NPC (
-        .PC(PC), .NPCOp(NPCOp), .Offset12(Offset), .Offset20(Offset20), .rs({RD1[31:2],2'b00}), .PCA4(PCA4), .NPC(NPC),
-        .imm(Imm32),.ex_PC(ex_PC),.clk(clk),.rst(rst),.funct3_0(Funct3_0),
-        .EX_Jump_Taken(EX_Jump_Taken), .ex_Offset(ex_Offset),.ex_Offset20(ex_Offset20), .A(A), .B(B),.ex_imm32(ex_imm32)
-    );//PC由于跨阶段了，所以不要了），自己创造一个接口；PCA4直接去到WB阶段;rs接入的数值是RD1，所以要考虑前递的情况！
-      //offset也废了，rs的RD1也不能要了
 
 
     // ?     Flopr————按理来说EX/MEM，所以最后的MUX我觉得应该另寻蹊跷了（

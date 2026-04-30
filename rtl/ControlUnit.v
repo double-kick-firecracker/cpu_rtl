@@ -11,7 +11,7 @@ module ControlUnit(
     input [6:0] Funct7, //
     input [2:0] Funct3, //
     input [4:0] id_rs1, id_rs2, id_rd,
-    input EX_Jump_Taken,        // 来自 NPC 的分支判定结果
+    input ID_Branch_Taken,        // 来自 NPC 的分支判定结果
     
     output reg PCWrite, //是否更新PC
     output reg InsMemRW,//是否取指令
@@ -28,11 +28,10 @@ module ControlUnit(
     //以上全部原本就有的接口都用作EXpipeline输出口
     output reg [4:0] ex_rs1, ex_rs2,wb_rd,
     output StallF, StallD, FlushD, FlushE,
-    output reg [4:0] mem_rd,
-    output reg Funct3_0
+    output reg [4:0] mem_rd
 );
     reg id_RFWrite, id_DMCtrl, id_ALUSrcA, id_Jump, id_Branch;
-    reg [1:0] id_ALUSrcB, id_RegSel, id_WDSel,mem_WDSel,ex_WDSel,id_NPCOp;
+    reg [1:0] id_ALUSrcB, id_RegSel, id_WDSel,mem_WDSel,ex_WDSel;
     reg [3:0] id_ALUOp;
     reg ex_RFWrite;
 //    reg ex_DMCtrl;
@@ -49,7 +48,7 @@ module ControlUnit(
         id_ALUSrcB  = `ALUSrcB_B;     // 默认rs2
         id_RegSel   = `RegSel_rd;     // 默认写回来源于rd
         id_WDSel    = `WDSel_FromALU; // 默认写回数据来自ALU
-        id_NPCOp    = `NPC_PC;        // 默认+4
+        NPCOp    = `NPC_PC;        // 默认+4
         ExtSel   = `ExtSel_SIGNED;   // 默认有符号拓展
         ALU_category = 2'b00;      // 默认用加法
         id_Jump     = 1'b0;
@@ -77,19 +76,19 @@ module ControlUnit(
             end
             `INSTR_BTYPE_OP: begin
                 ALU_category = 2'b01;
-                id_NPCOp    = `NPC_Offset12;
+                NPCOp    = `NPC_Offset12;
                 id_Branch   = 1'b1;
             end
             `INSTR_JAL_OP: begin
                 id_RFWrite      = 1'b1;
                 id_WDSel        = `WDSel_FromPC;  // 将 PC+4 写入 rd
-                id_NPCOp        = `NPC_Offset20;  // 触发 JAL 跳转
+                NPCOp        = `NPC_Offset20;  // 触发 JAL 跳转
                 id_Jump         = 1'b1;
             end
             `INSTR_JALR_OP: begin
                 id_RFWrite      = 1'b1;
                 id_WDSel        = `WDSel_FromPC;  // 将 PC+4 写入 rd
-                id_NPCOp        = `NPC_rs;        // 触发 JALR 跳转，且imm有符号
+                NPCOp        = `NPC_rs;        // 触发 JALR 跳转，且imm有符号
                 id_ALUSrcB      = `ALUSrcB_Imm;
                 id_Jump         = 1'b1;
             end
@@ -126,21 +125,19 @@ end
         if (rst) begin
             ALUOp <= 0; ALUSrcB <= 0; ex_WDSel <= 0; ex_RegSel <= 0;
             ALUSrcA <= 0; DMCtrl <= 0; ex_RFWrite <= 0;
-            ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;NPCOp<=0;
-            Funct3_0<=0;
+            ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;
         end
         else if (FlushE) begin
             ALUOp <= 0;
             ALUSrcB <= 0; ex_WDSel <= 0; ex_RegSel <= 0;
-            ALUSrcA <= 0; DMCtrl <= 0; ex_RFWrite <= 0;NPCOp<=0;
+            ALUSrcA <= 0; DMCtrl <= 0; ex_RFWrite <= 0;
             ex_rs1 <= 0; ex_rs2 <= 0; ex_rd <= 0;
-            Funct3_0<=0;
         end
         else begin
             ALUOp <= id_ALUOp; ALUSrcB <= id_ALUSrcB; 
             ex_WDSel <= id_WDSel; ex_RegSel <= id_RegSel; ALUSrcA <= id_ALUSrcA; 
-            DMCtrl <= id_DMCtrl; ex_RFWrite <= id_RFWrite; NPCOp<=id_NPCOp;
-            ex_rs1 <= id_rs1; ex_rs2 <= id_rs2; ex_rd <= id_rd; Funct3_0<=Funct3[0];
+            DMCtrl <= id_DMCtrl; ex_RFWrite <= id_RFWrite;
+            ex_rs1 <= id_rs1; ex_rs2 <= id_rs2; ex_rd <= id_rd;
         end
     end
 
@@ -179,16 +176,34 @@ end
     end
     
 //——————冒险检测单元——————用always语句来搞个时序，好像就可以了//
+    wire ID_is_Branch = (opcode == `INSTR_BTYPE_OP);
+    wire ID_is_JALR   = (opcode == `INSTR_JALR_OP);
+    
     wire id_reads_rs1 = (opcode != `INSTR_JAL_OP);
-    wire id_reads_rs2 = (opcode == `INSTR_RTYPE_OP || opcode == `INSTR_SW_OP || opcode == `INSTR_BTYPE_OP);
-    wire ex_is_load   = (ex_WDSel == `WDSel_FromMEM);
-
-    wire load_use_stall = ex_is_load && (ex_rd != 5'd0) && 
-                          ((id_reads_rs1 && (ex_rd == id_rs1)) || 
+    wire id_reads_rs2 = (opcode == `INSTR_RTYPE_OP || opcode == `INSTR_SW_OP || ID_is_Branch);
+    
+    wire ex_is_load  = (ex_WDSel  == `WDSel_FromMEM);
+    wire mem_is_load = (mem_WDSel == `WDSel_FromMEM);
+    
+    wire load_use_stall = ex_is_load && (ex_rd != 5'd0) &&
+                          ((id_reads_rs1 && (ex_rd == id_rs1)) ||
                            (id_reads_rs2 && (ex_rd == id_rs2)));
     
-    assign StallF = load_use_stall;
-    assign StallD = load_use_stall; 
-    assign FlushE = load_use_stall || EX_Jump_Taken; 
-    assign FlushD = EX_Jump_Taken;
+    wire id_npc_needs_rs1 = ID_is_Branch || ID_is_JALR;
+    wire id_npc_needs_rs2 = ID_is_Branch;
+    
+    wire npc_stall_EX = (ID_is_Branch || ID_is_JALR) && ex_RFWrite && (ex_rd != 5'd0) &&
+                        ((id_npc_needs_rs1 && (ex_rd == id_rs1)) ||
+                         (id_npc_needs_rs2 && (ex_rd == id_rs2)));
+    
+    wire npc_stall_MEM = (ID_is_Branch || ID_is_JALR) && mem_is_load && (mem_rd != 5'd0) &&
+                         ((id_npc_needs_rs1 && (mem_rd == id_rs1)) ||
+                          (id_npc_needs_rs2 && (mem_rd == id_rs2)));
+    
+    wire Stall_Global = load_use_stall || npc_stall_EX || npc_stall_MEM;
+    
+    assign StallF = Stall_Global;
+    assign StallD = Stall_Global;
+    assign FlushE = Stall_Global;
+    assign FlushD = ID_Branch_Taken && !Stall_Global;
 endmodule
