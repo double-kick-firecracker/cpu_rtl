@@ -91,8 +91,8 @@ set_drive		0       [get_ports $RST_PORT]
 # |STEP 6: set input delay using timing budget
 # |Assume a weak cell to drive the input pins
 # |===========================================================
-set	LIB_NAME            tcbn65lpwcz0d9.db
-# set WIRE_LOAD_MODEL     tsmc090_wl10
+set	LIB_NAME            tcbn65lpwcz0d9
+# set WIRE_LOAD_MODEL     TSMC32k_Lowk_Aggresive
 # set	DRIVE_CELL 		    INVX1
 # set DRIVE_PIN 		    Y
 set OPERATE_CONDITION	WCZ0D9COM
@@ -126,10 +126,12 @@ set_isolate_ports 	-type	        buffer      		[all_outputs]
 # |===========================================================
 # |STEP 9: set operating condition & wire load model 
 # |===========================================================
-# set_operating_conditions	-max	$OPERATE_CONDITION	-max_library	$LIB_NAME
+current_design $TOP_MODULE
+set_app_var auto_wire_load_selection false
+set_operating_conditions	-max	$OPERATE_CONDITION	-max_library	$LIB_NAME
 set auto_wire_load_selection true
-# set_wire_load_model         -name   $WIRE_LOAD_MODEL    -library        $LIB_NAME
-
+set_wire_load_model         -name   $WIRE_LOAD_MODEL    -library        $LIB_NAME
+set_wire_load_mode		top
 
 # |===========================================================
 # |STEP 10: set area constraint (Let DC try its best) 
@@ -233,5 +235,3 @@ redirect    -tee    -file   ${REPORT_PATH}/report_constraint.txt	{report_constra
 
 
 quit
-
-
